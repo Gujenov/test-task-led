@@ -21,6 +21,7 @@
 #define COUNTER_QUEUE_ITEM_SIZE     sizeof(uint32_t)
 
 #define TASK_STACK_SIZE_DEFAULT     2048
+
 #define TASK_PRIORITY_BLINK         2
 #define TASK_PRIORITY_COUNTER       3
 #define TASK_PRIORITY_LOGGER        4
@@ -28,12 +29,15 @@
 #define BLINK_PERIOD_MS             1000
 #define COUNTER_PERIOD_MS           5000
 
+#define FIRMWARE_VERSION            "1.A0.3.260419-00"
+
 static const char *TAG = "test-task-led";
 static QueueHandle_t s_counter_queue = NULL;
 
 void app_main(void)
 {
 	ESP_LOGI(TAG, "Bootstrapping project (Step 0)");
+	ESP_LOGI(TAG, "Firmware version: %s", FIRMWARE_VERSION);
 	ESP_LOGI(TAG,
 			 "Config: LED GPIO=%" PRIi32 ", queue_len=%" PRIi32 ", counter_period=%" PRIi32 " ms",
 			 (int32_t)LED_GPIO,
