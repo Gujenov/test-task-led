@@ -1,92 +1,88 @@
-# Test Task LED (ESP32-S3, ESP-IDF)
+# Test Task LED
 
-## Status
-- Step 0 completed: project bootstrap and base runtime configuration.
-- Step 0.5 completed: firmware version auto-update script adapted for this project.
-- Step 1 completed: `blink_task` toggles LED every 1 second.
-- Step 2 completed: `counter_task` increments counter every 5 seconds and sends message to queue with timestamp.
-- Step 3 completed: `logger_task` receives queue messages and logs counter value + measured interval.
-- Step 4 completed: integration hardening, diagnostics, and startup failure cleanup.
-- Next step: final documentation pass and release checklist (Step 5).
+Firmware for ESP32 DevKit V1 (ESP-IDF, C, FreeRTOS).
 
-## Implemented in Step 0
-- Shared constants for GPIO, queue, stack sizes, priorities, and periods.
-- Global FreeRTOS queue handle for counter-to-logger communication.
-- Startup logs with basic runtime configuration visibility.
-- Queue creation with error handling.
+The application runs three tasks:
+- LED Blink Task: one blink per second (150 ms ON + 850 ms OFF).
+- Counter Task: increments a counter every 5 seconds and pushes it to a queue.
+- Logger Task: receives queue messages, logs the value, and logs measured send interval.
 
-## Implemented in Step 0.5
-- Firmware version is defined in `main/test-task-led.c` as `FIRMWARE_VERSION`.
-- Version is printed at startup right after initialization begins.
-- `update_version.py` updates this macro in-place using format:
+## Hardware target
+- Current target: ESP32 (`idf.py set-target esp32`).
+
+## What is implemented
+- Queue-based communication between Counter and Logger tasks.
+- Interval measurement using `esp_timer_get_time()` (microsecond resolution).
+- Startup fault handling: if task creation fails, already-created resources are cleaned up.
+- Runtime diagnostics every 12 messages:
+  - queue occupancy,
+  - stack high-water marks for all tasks.
+- Pre-build firmware version auto-update (`update_version.py` is hooked from `CMakeLists.txt`).
+
+## Firmware version format
+Version format:
 
 ```text
 MCU.HW_VARIANT.RELEASE_TYPE.YYMMDD-XX
 ```
 
-- Index rules:
-  - if date tail (`YYMMDD`) matches current date, index increments (`00` -> `01` ... `99`),
-  - if date tail differs from current date, index resets to `00`.
+MCU index mapping:
+- `0` -> ESP32
+- `1` -> ESP32-S3
 
-- Version update script is executed automatically before each build from `CMakeLists.txt`.
+Examples:
+- `0.A0.3.260420-04` means ESP32 build.
+- `1.A0.3.260420-04` means ESP32-S3 build.
 
-### Run version update
-
-```bash
-python3 update_version.py
-```
-
-## Implemented in Step 1
-- `blink_task` created as an independent FreeRTOS task.
-- LED toggles every `BLINK_PERIOD_MS` using `vTaskDelay`.
-- Task stack size is set to `3072` bytes for ESP32-S3 stability.
-
-## Implemented in Step 2
-- `counter_task` created with a 5-second period (`COUNTER_PERIOD_MS`).
-- Uses `vTaskDelayUntil` for stable periodic scheduling.
-- Captures send timestamp with `esp_timer_get_time()` right before `xQueueSend`.
-- Sends `counter_message_t { value, sent_us }` into queue for logger task.
-- If queue is full, counter message is dropped and warning is logged.
-
-## Implemented in Step 3
-- `logger_task` created as a dedicated receiver for `s_counter_queue`.
-- For the first message, logs counter value and raw `sent_us` timestamp.
-- For subsequent messages, computes and logs interval from previous sample:
-  - `delta_us = current.sent_us - previous.sent_us`
-  - `delta_ms = delta_us / 1000.0`
-- Runtime monitor confirms ~5000 ms period between messages.
-
-Example log lines:
-
-```text
-I (...) test-task-led: logger_task: counter=1, first sample, sent_us=...
-I (...) test-task-led: logger_task: counter=2, delta=4999999 us (4999.999 ms), sent_us=...
-```
-
-## Implemented in Step 4
-- Startup now fails atomically:
-  - if any task creation fails, already created tasks and queue are cleaned up.
-- Logger adds consistency checks:
-  - warns if counter sequence has gaps/jumps,
-  - warns on non-monotonic timestamps.
-- Runtime diagnostics are logged periodically (every 12 messages):
-  - queue occupancy (`uxQueueMessagesWaiting`),
-  - stack high-water marks for blink/counter/logger tasks (`uxTaskGetStackHighWaterMark`).
-- This improves observability for typical ESP-IDF pitfalls: queue pressure, stack headroom, startup partial-failure states.
-
-## Build / flash (quick)
-> Full setup instructions: see [ESP-IDF setup instructions.md](ESP-IDF%20setup%20instructions.md)
+## Quick start (already have ESP-IDF installed)
+1. Clone project:
 
 ```bash
-git clone <repo-url>
-cd Test-task-led
-idf.py set-target esp32s3
+git clone https://github.com/Gujenov/test-task-led.git
+cd test-task-led
+```
+
+2. Load ESP-IDF environment:
+
+```bash
+. $HOME/esp/esp-idf/export.sh
+```
+
+3. Set target and build:
+
+```bash
+idf.py set-target esp32
 idf.py build
-idf.py -p <PORT> flash monitor
 ```
 
-## Notes
-- LED GPIO currently set to `GPIO_NUM_2`.
-- If your board wiring differs, update `LED_GPIO` in [main/test-task-led.c](main/test-task-led.c).
-- Counter value and measured interval are now printed by `logger_task` every cycle.
-- Diagnostic lines appear periodically with queue usage and stack margins for all tasks.
+4. Flash and monitor:
+
+```bash
+idf.py -p /dev/ttyUSB0 flash monitor
+```
+
+If this repo was previously built under ESP32-S3 on your machine, run `idf.py set-target esp32` again before building.
+
+## Full setup from clean Linux machine
+See [docs/ESP-IDF-Setup-and-GitHub.md](docs/ESP-IDF-Setup-and-GitHub.md).
+
+It includes:
+- ESP-IDF installation,
+- shell environment setup,
+- GitHub clone/push workflow,
+- build/flash/monitor commands,
+- common troubleshooting.
+
+## Important notes
+- Default LED pin in this project is `GPIO_NUM_2`.
+- If your board uses another LED pin, change `LED_GPIO` in [main/test-task-led.c](main/test-task-led.c).
+- Stack values are intentionally conservative for robustness and diagnostics.
+- Blink semantics in this project: one short pulse per second (`BLINK_ON_TIME_MS=150`, `BLINK_CYCLE_MS=1000`).
+
+## Acceptance checklist (latest local run)
+- [x] Target set to `esp32`.
+- [x] Build succeeds with ESP-IDF (`idf.py build`).
+- [x] Flash succeeds (`idf.py -p /dev/ttyUSB0 flash`).
+- [x] Monitor shows startup logs and all 3 tasks running.
+- [x] Logger prints ~5000 ms interval between counter messages.
+- [x] Periodic diagnostics line appears (`diag: processed=...`).

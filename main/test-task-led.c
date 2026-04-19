@@ -20,9 +20,9 @@
  *     high-resolution interval measurement (microsecond precision).
  *
  * Stack sizes:
- *   ESP32-S3 requires more stack than classic ESP32 due to wider registers and
- *   a larger interrupt/exception frame. 3072 bytes is a safe minimum for a simple
- *   GPIO blink task. Increase if additional local variables or calls are added.
+ *   Project is targeted for ESP32 (DevKit V1).
+ *   3072-byte task stacks are intentionally kept as a conservative value to keep
+ *   enough headroom for logging and future code growth.
  */
 
 #define LED_GPIO                    GPIO_NUM_2
@@ -36,11 +36,18 @@
 #define TASK_PRIORITY_COUNTER       3
 #define TASK_PRIORITY_LOGGER        4
 
-#define BLINK_PERIOD_MS             1000
+#define BLINK_CYCLE_MS              1000
+#define BLINK_ON_TIME_MS            150
 #define COUNTER_PERIOD_MS           5000
 #define LOGGER_DIAG_EVERY_MESSAGES  12
 
-#define FIRMWARE_VERSION            "1.A0.3.260420-03"
+/*
+ * Firmware version format: MCU.HW_VARIANT.RELEASE_TYPE.YYMMDD-XX
+ * MCU index mapping used in this project:
+ *   0 -> ESP32
+ *   1 -> ESP32-S3
+ */
+#define FIRMWARE_VERSION            "0.A0.3.260420-13"
 
 /*
  * Message sent from counter_task to logger_task via the queue.
@@ -88,6 +95,7 @@ static void cleanup_startup_resources(void)
 
 /*
  * Runtime diagnostics to help catch queue pressure and stack risks early.
+ * Note: uxTaskGetStackHighWaterMark returns words, not bytes.
  */
 static void log_runtime_diagnostics(uint32_t processed_messages)
 {
@@ -110,6 +118,7 @@ static void log_runtime_diagnostics(uint32_t processed_messages)
  *
  * Receives counter messages from queue and prints the measured interval
  * between consecutive sends using sent_us captured in counter_task.
+ * If queue overload drops messages, logger will report a counter jump.
  */
 static void logger_task(void *arg)
 {
@@ -210,10 +219,9 @@ static void counter_task(void *arg)
 /*
  * blink_task — Step 1
  *
- * Toggles the onboard LED once per BLINK_PERIOD_MS using vTaskDelay.
- * vTaskDelay is used intentionally here: blinking is a visual indicator
- * only, so simple relative delay is sufficient. Exact period accuracy is
- * not required and the simplicity keeps the task easy to read.
+ * Produces one visible blink per second: short ON pulse + OFF remainder.
+ * This interpretation matches "blink once per second" as a pulse pattern,
+ * not a 50% duty-cycle square wave.
  *
  * GPIO is configured inside the task so the task is self-contained and
  * can be created / destroyed independently.
@@ -237,12 +245,14 @@ static void blink_task(void *arg)
 		return;
 	}
 
-	bool led_on = false;
+	const TickType_t on_ticks = pdMS_TO_TICKS(BLINK_ON_TIME_MS);
+	const TickType_t off_ticks = pdMS_TO_TICKS(BLINK_CYCLE_MS - BLINK_ON_TIME_MS);
 
 	while (true) {
-		led_on = !led_on;
-		gpio_set_level(LED_GPIO, led_on ? 1 : 0);
-		vTaskDelay(pdMS_TO_TICKS(BLINK_PERIOD_MS));
+		gpio_set_level(LED_GPIO, 1);
+		vTaskDelay(on_ticks);
+		gpio_set_level(LED_GPIO, 0);
+		vTaskDelay(off_ticks);
 	}
 }
 
