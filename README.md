@@ -6,7 +6,8 @@
 - Step 1 completed: `blink_task` toggles LED every 1 second.
 - Step 2 completed: `counter_task` increments counter every 5 seconds and sends message to queue with timestamp.
 - Step 3 completed: `logger_task` receives queue messages and logs counter value + measured interval.
-- Next step: integration hardening and final cleanup (Step 4).
+- Step 4 completed: integration hardening, diagnostics, and startup failure cleanup.
+- Next step: final documentation pass and release checklist (Step 5).
 
 ## Implemented in Step 0
 - Shared constants for GPIO, queue, stack sizes, priorities, and periods.
@@ -62,6 +63,17 @@ I (...) test-task-led: logger_task: counter=1, first sample, sent_us=...
 I (...) test-task-led: logger_task: counter=2, delta=4999999 us (4999.999 ms), sent_us=...
 ```
 
+## Implemented in Step 4
+- Startup now fails atomically:
+  - if any task creation fails, already created tasks and queue are cleaned up.
+- Logger adds consistency checks:
+  - warns if counter sequence has gaps/jumps,
+  - warns on non-monotonic timestamps.
+- Runtime diagnostics are logged periodically (every 12 messages):
+  - queue occupancy (`uxQueueMessagesWaiting`),
+  - stack high-water marks for blink/counter/logger tasks (`uxTaskGetStackHighWaterMark`).
+- This improves observability for typical ESP-IDF pitfalls: queue pressure, stack headroom, startup partial-failure states.
+
 ## Build / flash (quick)
 > Full setup instructions: see [ESP-IDF setup instructions.md](ESP-IDF%20setup%20instructions.md)
 
@@ -77,3 +89,4 @@ idf.py -p <PORT> flash monitor
 - LED GPIO currently set to `GPIO_NUM_2`.
 - If your board wiring differs, update `LED_GPIO` in [main/test-task-led.c](main/test-task-led.c).
 - Counter value and measured interval are now printed by `logger_task` every cycle.
+- Diagnostic lines appear periodically with queue usage and stack margins for all tasks.

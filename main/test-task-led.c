@@ -38,8 +38,9 @@
 
 #define BLINK_PERIOD_MS             1000
 #define COUNTER_PERIOD_MS           5000
+#define LOGGER_DIAG_EVERY_MESSAGES  12
 
-#define FIRMWARE_VERSION            "1.A0.3.260420-01"
+#define FIRMWARE_VERSION            "1.A0.3.260420-03"
 
 /*
  * Message sent from counter_task to logger_task via the queue.
@@ -54,6 +55,55 @@ typedef struct {
 
 static const char *TAG = "test-task-led";
 static QueueHandle_t s_counter_queue = NULL;
+static TaskHandle_t s_blink_task_handle = NULL;
+static TaskHandle_t s_counter_task_handle = NULL;
+static TaskHandle_t s_logger_task_handle = NULL;
+
+/*
+ * Cleanup helper for partial startup failures.
+ * Deletes already created tasks and queue so app_main can fail atomically.
+ */
+static void cleanup_startup_resources(void)
+{
+	if (s_logger_task_handle != NULL) {
+		vTaskDelete(s_logger_task_handle);
+		s_logger_task_handle = NULL;
+	}
+
+	if (s_counter_task_handle != NULL) {
+		vTaskDelete(s_counter_task_handle);
+		s_counter_task_handle = NULL;
+	}
+
+	if (s_blink_task_handle != NULL) {
+		vTaskDelete(s_blink_task_handle);
+		s_blink_task_handle = NULL;
+	}
+
+	if (s_counter_queue != NULL) {
+		vQueueDelete(s_counter_queue);
+		s_counter_queue = NULL;
+	}
+}
+
+/*
+ * Runtime diagnostics to help catch queue pressure and stack risks early.
+ */
+static void log_runtime_diagnostics(uint32_t processed_messages)
+{
+	UBaseType_t queued = uxQueueMessagesWaiting(s_counter_queue);
+	UBaseType_t blink_hwm_words = (s_blink_task_handle != NULL) ? uxTaskGetStackHighWaterMark(s_blink_task_handle) : 0;
+	UBaseType_t counter_hwm_words = (s_counter_task_handle != NULL) ? uxTaskGetStackHighWaterMark(s_counter_task_handle) : 0;
+	UBaseType_t logger_hwm_words = (s_logger_task_handle != NULL) ? uxTaskGetStackHighWaterMark(s_logger_task_handle) : 0;
+
+	ESP_LOGI(TAG,
+			 "diag: processed=%" PRIu32 ", queue_waiting=%" PRIu32 ", stack_hwm_words{blink=%" PRIu32 ", counter=%" PRIu32 ", logger=%" PRIu32 "}",
+			 processed_messages,
+			 (uint32_t)queued,
+			 (uint32_t)blink_hwm_words,
+			 (uint32_t)counter_hwm_words,
+			 (uint32_t)logger_hwm_words);
+}
 
 /*
  * logger_task — Step 3
@@ -68,11 +118,21 @@ static void logger_task(void *arg)
 	counter_message_t msg;
 	bool has_prev = false;
 	int64_t prev_sent_us = 0;
+	uint32_t expected_counter = 1;
+	uint32_t processed = 0;
 
 	while (true) {
 		BaseType_t received = xQueueReceive(s_counter_queue, &msg, portMAX_DELAY);
 		if (received != pdPASS) {
 			continue;
+		}
+
+		if (msg.value != expected_counter) {
+			ESP_LOGW(TAG,
+					 "logger_task: counter jump detected, expected=%" PRIu32 ", got=%" PRIu32,
+					 expected_counter,
+					 msg.value);
+			expected_counter = msg.value;
 		}
 
 		if (!has_prev) {
@@ -83,6 +143,12 @@ static void logger_task(void *arg)
 			has_prev = true;
 		} else {
 			int64_t delta_us = msg.sent_us - prev_sent_us;
+			if (delta_us <= 0) {
+				ESP_LOGW(TAG,
+						 "logger_task: non-monotonic timestamp, prev=%" PRIi64 ", curr=%" PRIi64,
+						 prev_sent_us,
+						 msg.sent_us);
+			}
 			double delta_ms = (double)delta_us / 1000.0;
 			ESP_LOGI(TAG,
 					 "logger_task: counter=%" PRIu32 ", delta=%" PRIi64 " us (%.3f ms), sent_us=%" PRIi64,
@@ -93,6 +159,12 @@ static void logger_task(void *arg)
 		}
 
 		prev_sent_us = msg.sent_us;
+		expected_counter = msg.value + 1;
+		processed++;
+
+		if ((processed % LOGGER_DIAG_EVERY_MESSAGES) == 0) {
+			log_runtime_diagnostics(processed);
+		}
 	}
 }
 
@@ -197,12 +269,11 @@ void app_main(void)
 		TASK_STACK_SIZE_BLINK,
 		NULL,
 		TASK_PRIORITY_BLINK,
-		NULL);
+		&s_blink_task_handle);
 
 	if (blink_ok != pdPASS) {
 		ESP_LOGE(TAG, "Failed to create blink_task");
-		vQueueDelete(s_counter_queue);
-		s_counter_queue = NULL;
+		cleanup_startup_resources();
 		return;
 	}
 
@@ -214,12 +285,11 @@ void app_main(void)
 		TASK_STACK_SIZE_COUNTER,
 		NULL,
 		TASK_PRIORITY_COUNTER,
-		NULL);
+		&s_counter_task_handle);
 
 	if (counter_ok != pdPASS) {
 		ESP_LOGE(TAG, "Failed to create counter_task");
-		vQueueDelete(s_counter_queue);
-		s_counter_queue = NULL;
+		cleanup_startup_resources();
 		return;
 	}
 
@@ -231,12 +301,14 @@ void app_main(void)
 		TASK_STACK_SIZE_LOGGER,
 		NULL,
 		TASK_PRIORITY_LOGGER,
-		NULL);
+		&s_logger_task_handle);
 
 	if (logger_ok != pdPASS) {
 		ESP_LOGE(TAG, "Failed to create logger_task");
+		cleanup_startup_resources();
 		return;
 	}
 
 	ESP_LOGI(TAG, "Step 3 complete: logger_task running");
+	ESP_LOGI(TAG, "Step 4 complete: runtime diagnostics and startup cleanup enabled");
 }
