@@ -88,6 +88,16 @@ idf.py -p /dev/ttyUSB0 flash
 idf.py -p /dev/ttyUSB0 monitor
 ```
 
+Important:
+- This repository stores source code and config, not prebuilt binaries.
+- Firmware images are generated locally by `idf.py build` into `build/`.
+- Required flash artifacts are produced automatically:
+	- `build/bootloader/bootloader.bin`
+	- `build/partition_table/partition-table.bin`
+	- `build/test-task-led.bin`
+	- `build/flash_args`
+- If you skip build, there are no firmware files to flash.
+
 ## 7) Typical GitHub workflow (for contributors)
 
 ```bash

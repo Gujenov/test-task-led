@@ -63,6 +63,18 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 If this repo was previously built under ESP32-S3 on your machine, run `idf.py set-target esp32` again before building.
 
+## About firmware files in this repository
+- Prebuilt firmware binaries are **not** stored in git (`build/` is ignored).
+- After `idf.py build`, generated files are created locally in `build/`, including:
+  - `build/bootloader/bootloader.bin`
+  - `build/partition_table/partition-table.bin`
+  - `build/test-task-led.bin`
+  - `build/flash_args` (used by ESP-IDF/esptool during flashing)
+- So reviewers can flash the board by following this repo's instructions, but only after local build.
+- To flash from generated local artifacts, use either:
+  - `idf.py -p /dev/ttyUSB0 flash`
+  - or from `build/`: `python -m esptool --chip esp32 write_flash @flash_args`
+
 ## Full setup from clean Linux machine
 See [docs/ESP-IDF-Setup-and-GitHub.md](docs/ESP-IDF-Setup-and-GitHub.md).
 
@@ -72,6 +84,11 @@ It includes:
 - GitHub clone/push workflow,
 - build/flash/monitor commands,
 - common troubleshooting.
+
+## Fallback: prebuilt firmware in repository
+- A ready-to-flash ESP32 firmware bundle is included in `prebuilt/esp32/`.
+- Use this only as a fallback when local build is not possible.
+- Flashing instructions are in [docs/How-to-Flash-Prebuilt-Firmware.md](docs/How-to-Flash-Prebuilt-Firmware.md).
 
 ## Important notes
 - Default LED pin in this project is `GPIO_NUM_2`.

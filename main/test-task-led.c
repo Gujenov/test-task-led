@@ -47,7 +47,7 @@
  *   0 -> ESP32
  *   1 -> ESP32-S3
  */
-#define FIRMWARE_VERSION            "0.A0.3.260420-13"
+#define FIRMWARE_VERSION            "0.A0.3.260420-14"
 
 /*
  * Message sent from counter_task to logger_task via the queue.
