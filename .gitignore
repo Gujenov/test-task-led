@@ -1,2 +1,5 @@
 build/
 .vscode/
+__pycache__/
+build-esp32s3/
+sdkconfig.old
