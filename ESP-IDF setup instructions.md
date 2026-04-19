@@ -88,11 +88,6 @@ For zsh:
 
 echo 'alias get_idf=". $HOME/esp/esp-idf/export.sh"' >> ~/.zshrc
 
-For bash:
-
-echo 'alias get_idf=". $HOME/esp/esp-idf/export.sh"' >> ~/.bashrc
-
-That way you can just run `get_idf` in a new terminal instead of typing the full command every time.
 
 
 Main folders you will usually end up with:

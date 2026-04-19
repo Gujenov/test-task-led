@@ -1,0 +1,42 @@
+Task
+Develop firmware for an ESP32 controller using ESP-IDF in C/C++.
+
+The firmware will be tested on an ESP32 DevKit V1.
+A Git repository must be created, and development must use proper commits.
+
+Firmware Requirements
+The firmware must contain three FreeRTOS tasks:
+
+1.	Counter Task
+○	Increment an internal counter every 5 seconds.
+○	Send the incremented value to a FreeRTOS queue.
+
+2.	Logger Task
+○	Receive values from the queue.
+○	Log the received value to the standard ESP-IDF logging system.
+○	Measure and log the time difference between message sends (i.e., the interval between values placed in the queue).
+
+3.	LED Blink Task
+○	Blink an LED once per second.
+
+What evaluators will focus on
+Quality is more important than speed of implementation.
+Quality Criteria
+●	Fault tolerance/robustness
+●	Readable, maintainable code
+●	Good documentation
+Documentation Requirements
+
+Since reviewers will use a clean Linux machine, the project must include:
+●	Clear instructions on:
+○	How to install the required ESP-IDF tooling.
+○	How to download the project from Git.
+○	How to build it.
+○	How to flash it to the ESP32.
+●	References to official manufacturer documentation whenever applicable.
+●	Clarification of all non-obvious implementation details that are not covered by ESP-IDF documentation.
+
+Example expectations:
+●	A README.md showing git clone…, idf.py set-target, idf.py build, idf.py flash, etc.
+●	Comments in code explaining important choices.
+●	Handling of typical ESP-IDF pitfalls (watchdog, stack size, error checking).
